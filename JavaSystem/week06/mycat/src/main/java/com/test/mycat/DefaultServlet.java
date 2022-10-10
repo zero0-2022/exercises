@@ -10,7 +10,6 @@ import com.test.servlet.MyServlet;
 public class DefaultServlet extends MyServlet {
     @Override
     public void doGet(MyRequest request, MyResponse response) throws Exception {
-        String uri = request.getUri();
         response.write("404 Not Found");
     }
 

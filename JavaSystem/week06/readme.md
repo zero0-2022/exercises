@@ -4,6 +4,9 @@
 ![](attachments/Pasted%20image%2020221010051633.png)
 ##### 3. 加参数
 ![](attachments/Pasted%20image%2020221010051710.png)
+
 ##### 4. 加扩展名和参数
 ![](attachments/Pasted%20image%2020221010051752.png)
 
+##### 5. 静态资源
+![](attachments/Pasted%20image%2020221010083031.png)

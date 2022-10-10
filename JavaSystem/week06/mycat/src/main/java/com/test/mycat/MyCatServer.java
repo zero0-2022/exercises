@@ -12,9 +12,10 @@ import org.dom4j.DocumentException;
 import org.dom4j.Element;
 import org.dom4j.io.SAXReader;
 
-import java.io.File;
-import java.io.InputStream;
+import java.io.*;
 import java.net.URL;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -23,11 +24,11 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class MyCatServer {
     // key 为 servlet 的类名，value 为对应 servlet 实例对象
-    private Map<String, MyServlet> nameServletMap = new ConcurrentHashMap<>();
+    private final Map<String, MyServlet> nameServletMap = new ConcurrentHashMap<>();
     // key 为 servlet 的类名，value 为对应 servlet 类的全限定性类名
-    private Map<String, String> nameServletClassMap = new HashMap<>();
+    private final Map<String, String> nameServletClassMap = new HashMap<>();
     // 静态资源缓存
-    private Set<String> staticSources = new HashSet<>();
+    private final Map<String, String> staticSources = new HashMap<>();
     // MyServlet 存放位置
     private final String basePackagePath;
     // 静态资源 存放位置
@@ -39,7 +40,7 @@ public class MyCatServer {
     }
 
     // 启动 MyCat 服务
-    public void start() throws Exception {
+    public void start(){
         cacheClassesName(this.basePackagePath);
         cacheStaticName(this.staticSourcePath);
         startServer();
@@ -73,17 +74,15 @@ public class MyCatServer {
 
     private void cacheStaticName(String path) {
         // 将 url 资源转为 File 资源
-        File dir = getFileDir(path);
-        if (dir == null) {
-            return;
-        }
+        File dir = new File(path);
+        Path p = Paths.get(path);
         // 循环遍历指定包及子包的所有文件，查找所有 .class 文件
         for (File f: Objects.requireNonNull(dir.listFiles())) {
             String name = f.getName();
             if (f.isDirectory()) { // 若当前遍历的 f 是目录，递归继续处理
-                cacheClassesName(path + "." + name);
+                cacheStaticName(p.resolve(name).toString());
             } else {
-                staticSources.add(name);
+                staticSources.put(name, p.resolve(name).toString());
             }
         }
     }

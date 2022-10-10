@@ -3,24 +3,27 @@ package com.test.mycat;
 import com.test.servlet.MyRequest;
 import com.test.servlet.MyResponse;
 import com.test.servlet.MyServlet;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.*;
 
 import javax.activation.MimetypesFileTypeMap;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class MyCatHandler extends ChannelInboundHandlerAdapter {
     private Map<String, MyServlet> nameServletMap = new ConcurrentHashMap<>();
     private Map<String, String> nameServletClassMap = new HashMap<>();
-    private Set<String> staticSources = new HashSet<>();
+    private Map<String, String> staticSources = new HashMap<>();
     private final MimetypesFileTypeMap mimetypesFileTypeMap = new MimetypesFileTypeMap();
 
-    public MyCatHandler(Map<String, MyServlet> nameServletMap, Map<String, String> nameClassMap, Set<String> staticSources) {
+    public MyCatHandler(Map<String, MyServlet> nameServletMap, Map<String, String> nameClassMap, Map<String, String> staticSources) {
         this.nameServletMap = nameServletMap;
         this.nameServletClassMap = nameClassMap;
         this.staticSources = staticSources;
@@ -68,10 +71,10 @@ public class MyCatHandler extends ChannelInboundHandlerAdapter {
                 }
             }
         }
-        // 访问静态资源
         if (servlet instanceof DefaultServlet) {
+            handleStaticSource(ctx, request, uri);
+            return;
         }
-
         MyRequest myRequest = new HttpMyRequest(request);
         MyResponse myResponse = new HttpMyResponse(request, ctx);
         String method = myRequest.getMethod();
@@ -80,6 +83,61 @@ public class MyCatHandler extends ChannelInboundHandlerAdapter {
         } else if(method.equalsIgnoreCase("POST")) {
             servlet.doPost(myRequest, myResponse);
         }
+        ctx.close();
+    }
+
+    public void handleStaticSource(ChannelHandlerContext ctx, HttpRequest request, String uri) throws IOException {
+        if(!uri.contains("/")) {
+            return;
+        }
+        String sourceName = uri.substring(uri.lastIndexOf("/") + 1);
+        String path = staticSources.get(sourceName);
+        if (path == null) {
+            return;
+        }
+        staticContentWrite(ctx, request, path, sourceName);
+    }
+
+    public void staticContentWrite(ChannelHandlerContext ctx, HttpRequest request, String path, String sourceName) throws IOException {
+        FileInputStream fileInputStream = new FileInputStream(path);
+        FileChannel fileChannel = fileInputStream.getChannel();
+
+        // 读取文件到 buffer 缓存
+        long min = Math.min(fileChannel.size(), 1024);
+        ByteBuffer byteBuffer = ByteBuffer.allocate((int)min);
+        int read;
+        while (true) {
+            byteBuffer.clear();
+            read = fileChannel.read(byteBuffer);
+            if (read == -1){
+                break;
+            }
+            byteBuffer.flip();
+        }
+        // 创建响应对象
+        FullHttpResponse response = new DefaultFullHttpResponse(
+                HttpVersion.HTTP_1_1,
+                HttpResponseStatus.OK,
+                Unpooled.wrappedBuffer(byteBuffer)
+        );
+        // 获取响应头
+        HttpHeaders headers = response.headers();
+        // 设置响应体类型
+        String mimeType = mimetypesFileTypeMap.getContentType(path);
+        String fileType = mimeType.equals("application/octet-stream") ? "text/html": mimeType;
+        if (sourceName.endsWith(".zip") || sourceName.endsWith(".rar") || sourceName.endsWith(".tar")) {
+            fileType = "application/zip";
+        }
+        headers.set(HttpHeaderNames.CONTENT_TYPE, fileType);
+        // 设置响应长度
+        headers.set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+        // 设置缓存过期时间
+        headers.set(HttpHeaderNames.EXPIRES, 0);
+        // 若 HTTP 请求是长连接，则相应也用长连接
+        if (HttpUtil.isKeepAlive(request)) {
+            headers.set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
+        }
+        ctx.writeAndFlush(response);
         ctx.close();
     }
 }

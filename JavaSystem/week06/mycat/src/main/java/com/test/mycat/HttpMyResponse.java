@@ -6,6 +6,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.*;
 import io.netty.util.internal.StringUtil;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
 public class HttpMyResponse implements MyResponse {
